@@ -1,0 +1,15 @@
+body {
+    background: #fceed1;
+}
+.card {
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+.btn-warning {
+    background: #f2d53c;
+    border: none;
+    color: #2d545e;
+}
+.btn-info {
+    background: #7d3cff;
+    border: none;
+}
