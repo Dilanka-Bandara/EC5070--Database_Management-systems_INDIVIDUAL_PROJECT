@@ -1,24 +1,24 @@
-
-<!-- header.php -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Lab Rescheduling Management</title>
-    <link rel="stylesheet" href="/assets/css/style.css">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #fceed1; }
+        .navbar { background: #7d3cff; }
+        .navbar-brand, .nav-link, .navbar-text { color: #fff !important; }
+    </style>
 </head>
 <body>
-<nav>
-    <div class="logo">LabReschedule</div>
-    <ul>
-        <li><a href="/labreschedule/pages/dashboard.php">Dashboard</a></li>
-        <li><a href="/labreschedule/pages/reschedule_request.php">Request Reschedule</a></li>
-        <li><a href="/labreschedule/pages/schedule_list.php">Lab Schedules</a></li>
-        <li><a href="/labreschedule/pages/attendance.php">Attendance</a></li>
-        <li><a href="/labreschedule/pages/notifications.php">Notifications</a></li>
-        <li><a href="/labreschedule/pages/logs.php">Logs</a></li>
-        <li><a href="/labreschedule/pages/login.php">Login</a></li>
-    </ul>
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="/labreschedule/index.php">LabReschedule</a>
+    <div>
+      <ul class="navbar-nav">
+        <li class="nav-item"><a class="nav-link" href="/labreschedule/pages/logout.php">Logout</a></li>
+      </ul>
+    </div>
+  </div>
 </nav>
-<main>
+<div class="container mt-4">
