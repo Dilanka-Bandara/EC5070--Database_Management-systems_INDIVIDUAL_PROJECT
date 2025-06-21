@@ -3,7 +3,7 @@ session_start();
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    require 'includes/db_connect.php'; // Adjust path if needed
+    require 'includes/db_connect.php';
 
     $username = trim($_POST['username']);
     $password = $_POST['password'];
@@ -40,9 +40,68 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <title>Lab Reschedule Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background: #fceed1; }
-        .login-box { margin: 5% auto; max-width: 400px; background: #fff; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 2em; }
-        .logo { color: #7d3cff; font-weight: bold; font-size: 2em; text-align: center; }
+        body {
+            background: linear-gradient(135deg, #fceed1 0%, #ffe6f2 100%);
+            font-family: 'Poppins', sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-box {
+            max-width: 450px;
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            padding: 2.5em;
+            position: relative;
+        }
+        .login-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, #00CC99, #FF355E);
+        }
+        .logo {
+            color: #4B0082;
+            font-weight: bold;
+            font-size: 2.2em;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .form-control, .form-select {
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #00CC99;
+            box-shadow: 0 0 0 0.2rem rgba(0, 204, 153, 0.25);
+        }
+        .btn-primary {
+            background: #FF355E;
+            border: none;
+            font-weight: 600;
+            padding: 12px;
+            border-radius: 30px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background: #e62e4d;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255, 53, 94, 0.3);
+        }
+        .alert-danger {
+            background: rgba(255, 53, 94, 0.1);
+            color: #FF355E;
+            border: none;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
     </style>
 </head>
 <body>
@@ -66,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <option value="coordinator">Subject Coordinator</option>
             </select>
         </div>
-        <button type="submit" class="btn btn-primary w-100" style="background:#7d3cff;border:0;">Login</button>
+        <button type="submit" class="btn btn-primary w-100">Login</button>
     </form>
 </div>
 </body>
