@@ -13,7 +13,7 @@
 <body>
 <nav class="navbar navbar-expand-lg">
   <div class="container">
-    <a class="navbar-brand" href="/labreschedule/index.php">LabReschedule</a>
+    <a class="navbar-brand" href="/labreschedule/index.php">Lab Reschedule System</a>
     <div>
       <ul class="navbar-nav">
         <li class="nav-item"><a class="nav-link" href="/labreschedule/pages/logout.php">Logout</a></li>
