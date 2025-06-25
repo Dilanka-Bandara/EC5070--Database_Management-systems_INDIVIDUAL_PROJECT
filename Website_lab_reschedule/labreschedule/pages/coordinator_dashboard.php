@@ -45,14 +45,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['decision']) && isset($
             $stmt = $pdo->prepare("UPDATE RescheduleRequest SET Status = ? WHERE RequestID = ?");
             $stmt->execute([$status, $requestID]);
 
-            // Send notification to student
-            $notificationMessage = "Your reschedule request (ID: $requestID) for lab schedule $scheduleID has been $status by the coordinator.";
+            // Log the action with current timestamp (this creates our decision timestamp)
+            $log = $pdo->prepare("INSERT INTO RescheduleLog (RequestID, Action, Timestamp) VALUES (?, ?, NOW())");
+            $log->execute([$requestID, $status]);
+
+            // Get the exact decision time from the log we just created
+            $getDecisionTime = $pdo->prepare("
+                SELECT Timestamp FROM RescheduleLog 
+                WHERE RequestID = ? AND Action = ? 
+                ORDER BY Timestamp DESC LIMIT 1
+            ");
+            $getDecisionTime->execute([$requestID, $status]);
+            $decisionTime = $getDecisionTime->fetch();
+
+            // Send notification to student with exact decision time
+            if ($decisionTime) {
+                $decisionTimeFormatted = date('M d, Y \a\t g:i A', strtotime($decisionTime['Timestamp']));
+                $notificationMessage = "Your reschedule request (ID: $requestID) for lab schedule $scheduleID was $status on $decisionTimeFormatted by the coordinator.";
+            } else {
+                $notificationMessage = "Your reschedule request (ID: $requestID) for lab schedule $scheduleID has been $status by the coordinator.";
+            }
+            
             $notif_student = $pdo->prepare("INSERT INTO Notification (Message, Timestamp, Type, StudentID) VALUES (?, NOW(), ?, ?)");
             $notif_student->execute([$notificationMessage, 'reschedule_response', $studentID]);
 
-            // Log the action
-            $log = $pdo->prepare("INSERT INTO RescheduleLog (RequestID, Action, Timestamp) VALUES (?, ?, NOW())");
-            $log->execute([$requestID, $status]);
+            // Send confirmation notification to coordinator
+            $coordinatorMessage = "You have successfully $status reschedule request (ID: $requestID) for student ID: $studentID.";
+            $notif_coordinator = $pdo->prepare("INSERT INTO Notification (Message, Timestamp, Type, CoordinatorID) VALUES (?, NOW(), ?, ?)");
+            $notif_coordinator->execute([$coordinatorMessage, 'action_confirmation', $coordinatorID]);
         }
         
     } catch (PDOException $e) {
@@ -113,6 +133,16 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([$coordinatorID]);
 $stats['approved_requests'] = $stmt->fetch()['approved'];
+
+// Rejected requests
+$stmt = $pdo->prepare("
+    SELECT COUNT(*) as rejected 
+    FROM RescheduleRequest rr
+    JOIN LabSchedule ls ON rr.ScheduleID = ls.ScheduleID
+    WHERE ls.CoordinatorID = ? AND rr.Status = 'Rejected'
+");
+$stmt->execute([$coordinatorID]);
+$stats['rejected_requests'] = $stmt->fetch()['rejected'];
 
 // Total instructors under coordination
 $stmt = $pdo->prepare("SELECT COUNT(DISTINCT InstructorID) as total FROM LabSchedule WHERE CoordinatorID = ? AND InstructorID IS NOT NULL");
@@ -231,9 +261,9 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                 </div>
                 <div class="col-md-3 mb-3">
                     <div class="stats-card slide-up" style="animation-delay: 0.3s;">
-                        <i class="fas fa-chalkboard-teacher stats-icon"></i>
-                        <div class="stats-number"><?= $stats['total_instructors'] ?></div>
-                        <div class="stats-label">Instructors</div>
+                        <i class="fas fa-times-circle stats-icon"></i>
+                        <div class="stats-number"><?= $stats['rejected_requests'] ?></div>
+                        <div class="stats-label">Rejected Requests</div>
                     </div>
                 </div>
             </div>
@@ -341,8 +371,8 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                         </div>
                     </div>
 
-                    <!-- Lab Schedules -->
-                    <div class="card fade-in">
+                    <!-- Recent Lab Schedules -->
+                    <div class="card mb-4 fade-in">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">
                                 <i class="fas fa-calendar-week me-2"></i>
@@ -423,6 +453,98 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                             </div>
                         </div>
                     </div>
+
+                    <!-- Recent Approved & Rejected Requests (UPDATED WITH RESCHEDULE LOG TIMESTAMP) -->
+                    <div class="card fade-in">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-list-check me-2"></i>
+                                Recent Approved & Rejected Requests
+                            </h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-container">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Request ID</th>
+                                            <th>Student</th>
+                                            <th>Lab Schedule</th>
+                                            <th>Status</th>
+                                            <th>Decision Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php
+                                    $processedRequests = $pdo->prepare("
+                                        SELECT rr.*, s.Name as StudentName, l.LabName, ls.TimeSlot, ls.Date as ScheduleDate,
+                                               rl.Timestamp as DecisionTimestamp
+                                        FROM RescheduleRequest rr
+                                        JOIN Student s ON rr.StudentID = s.StudentID
+                                        JOIN LabSchedule ls ON rr.ScheduleID = ls.ScheduleID
+                                        JOIN Lab l ON ls.LabID = l.LabID
+                                        LEFT JOIN RescheduleLog rl ON rr.RequestID = rl.RequestID 
+                                            AND rl.Action = rr.Status
+                                        WHERE ls.CoordinatorID = ? AND rr.Status IN ('Approved', 'Rejected')
+                                        ORDER BY COALESCE(rl.Timestamp, rr.RequestDate) DESC
+                                        LIMIT 10
+                                    ");
+                                    $processedRequests->execute([$coordinatorID]);
+                                    
+                                    if ($processedRequests->rowCount() > 0) {
+                                        while ($request = $processedRequests->fetch()):
+                                            $statusClass = $request['Status'] === 'Approved' ? 'success' : 'danger';
+                                    ?>
+                                        <tr>
+                                            <td><span class="fw-bold"><?= htmlspecialchars($request['RequestID']) ?></span></td>
+                                            <td>
+                                                <div>
+                                                    <strong><?= htmlspecialchars($request['StudentName']) ?></strong><br>
+                                                    <small class="text-muted">ID: <?= htmlspecialchars($request['StudentID']) ?></small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <strong><?= htmlspecialchars($request['LabName']) ?></strong><br>
+                                                    <small class="text-muted">
+                                                        <?= date('M d, Y', strtotime($request['ScheduleDate'])) ?> - 
+                                                        <?= htmlspecialchars($request['TimeSlot']) ?>
+                                                    </small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($request['Status']) ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if ($request['DecisionTimestamp']): ?>
+                                                    <span class="fw-medium"><?= date('M d, Y', strtotime($request['DecisionTimestamp'])) ?></span><br>
+                                                    <small class="text-muted">
+                                                        <?= date('g:i A', strtotime($request['DecisionTimestamp'])) ?>
+                                                        <span class="badge bg-success ms-1">Decision Time</span>
+                                                    </small>
+                                                <?php else: ?>
+                                                    <span class="fw-medium"><?= date('M d, Y', strtotime($request['RequestDate'])) ?></span><br>
+                                                    <small class="text-muted">
+                                                        <?= date('g:i A', strtotime($request['RequestDate'])) ?>
+                                                        <span class="badge bg-secondary ms-1">Request Time</span>
+                                                    </small>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php
+                                        endwhile;
+                                    } else {
+                                        echo "<tr><td colspan='5' class='text-center py-4'>
+                                                <i class='fas fa-inbox fa-2x text-muted mb-2'></i><br>
+                                                No processed requests found
+                                              </td></tr>";
+                                    }
+                                    ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="col-lg-4">
@@ -491,30 +613,34 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                         </div>
                     </div>
 
-                    <!-- System Notifications -->
+                    <!-- System Notifications with Delete -->
                     <div class="card fade-in">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">
                                 <i class="fas fa-bell me-2"></i>
                                 System Notifications
                             </h5>
-                            <small class="text-muted">Recent alerts</small>
+                            <button class="btn btn-sm btn-outline-primary" onclick="refreshNotifications()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="notificationContainer">
                             <?php
                             // Get system-wide notifications or coordinator-specific ones
                             $notifications = $pdo->prepare("
-                                SELECT * FROM Notification 
-                                WHERE Type = 'system' OR StudentID IN (
+                                SELECT DISTINCT n.*, s.Name as StudentName
+                                FROM Notification n
+                                LEFT JOIN Student s ON n.StudentID = s.StudentID
+                                WHERE (n.StudentID IN (
                                     SELECT DISTINCT rr.StudentID 
                                     FROM RescheduleRequest rr 
                                     JOIN LabSchedule ls ON rr.ScheduleID = ls.ScheduleID 
                                     WHERE ls.CoordinatorID = ?
-                                )
-                                ORDER BY Timestamp DESC 
+                                ) OR n.CoordinatorID = ?)
+                                ORDER BY n.Timestamp DESC 
                                 LIMIT 5
                             ");
-                            $notifications->execute([$coordinatorID]);
+                            $notifications->execute([$coordinatorID, $coordinatorID]);
                             
                             if ($notifications->rowCount() > 0) {
                                 while ($notif = $notifications->fetch()):
@@ -526,7 +652,12 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                                     <div class="flex-grow-1">
                                         <p class="mb-1 fw-medium"><?= htmlspecialchars($notif['Message']) ?></p>
                                         <small class="text-muted">
-                                            <i class="fas fa-clock me-1"></i>
+                                            <?php if ($notif['StudentName']): ?>
+                                                <i class="fas fa-user me-1"></i><?= htmlspecialchars($notif['StudentName']) ?>
+                                            <?php else: ?>
+                                                <i class="fas fa-user-tie me-1"></i>System
+                                            <?php endif; ?>
+                                            <i class="fas fa-clock ms-2 me-1"></i>
                                             <?= date('M d, Y g:i A', strtotime($notif['Timestamp'])) ?>
                                         </small>
                                     </div>
@@ -646,16 +777,17 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-    // Chart.js for system overview
+    // Working Chart.js for system overview
     <?php
-    // Get data for chart
+    // Get data for chart showing request status distribution
     $chartData = $pdo->prepare("
         SELECT 
-            COUNT(CASE WHEN Status = 'Scheduled' THEN 1 END) as scheduled,
-            COUNT(CASE WHEN Status = 'Completed' THEN 1 END) as completed,
-            COUNT(CASE WHEN Status = 'Cancelled' THEN 1 END) as cancelled
-        FROM LabSchedule 
-        WHERE CoordinatorID = ?
+            COUNT(CASE WHEN rr.Status = 'Pending' THEN 1 END) as pending,
+            COUNT(CASE WHEN rr.Status = 'Approved' THEN 1 END) as approved,
+            COUNT(CASE WHEN rr.Status = 'Rejected' THEN 1 END) as rejected
+        FROM RescheduleRequest rr
+        JOIN LabSchedule ls ON rr.ScheduleID = ls.ScheduleID
+        WHERE ls.CoordinatorID = ?
     ");
     $chartData->execute([$coordinatorID]);
     $overview = $chartData->fetch();
@@ -665,19 +797,20 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
     const overviewChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Scheduled', 'Completed', 'Cancelled'],
+            labels: ['Pending', 'Approved', 'Rejected'],
             datasets: [{
                 data: [
-                    <?= $overview['scheduled'] ?? 0 ?>,
-                    <?= $overview['completed'] ?? 0 ?>,
-                    <?= $overview['cancelled'] ?? 0 ?>
+                    <?= $overview['pending'] ?? 0 ?>,
+                    <?= $overview['approved'] ?? 0 ?>,
+                    <?= $overview['rejected'] ?? 0 ?>
                 ],
                 backgroundColor: [
-                    '#4f46e5',
+                    '#f59e0b',
                     '#10b981',
                     '#ef4444'
                 ],
-                borderWidth: 0
+                borderWidth: 2,
+                borderColor: '#ffffff'
             }]
         },
         options: {
@@ -685,11 +818,46 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
                 }
             }
         }
     });
+
+    // Notification refresh functionality
+    function refreshNotifications() {
+        const refreshButton = document.querySelector('.btn-outline-primary');
+        const notificationContainer = document.getElementById('notificationContainer');
+        
+        // Show loading state
+        if (refreshButton) {
+            refreshButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            refreshButton.disabled = true;
+        }
+        
+        fetch('refresh_notifications.php')
+            .then(response => response.text())
+            .then(data => {
+                notificationContainer.innerHTML = data;
+            })
+            .catch(error => {
+                console.error('Error refreshing notifications:', error);
+            })
+            .finally(() => {
+                // Reset refresh button
+                if (refreshButton) {
+                    refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i>';
+                    refreshButton.disabled = false;
+                }
+            });
+    }
+
+    // Auto-refresh notifications every 30 seconds
+    setInterval(refreshNotifications, 30000);
 
     // Auto-hide alerts
     document.addEventListener('DOMContentLoaded', function() {

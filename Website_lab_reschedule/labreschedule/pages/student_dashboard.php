@@ -174,8 +174,82 @@ $stats['unread_notifications'] = $stmt->fetch()['unread'];
             <!-- Recent Activity -->
             <div class="row">
                 <div class="col-lg-8">
-                    <!-- Recent Reschedule Requests -->
+                    <!-- Available Lab Schedules (MOVED UP - NOW FIRST) -->
                     <div class="card mb-4 fade-in">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Available Lab Schedules
+                            </h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-container">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Lab</th>
+                                            <th>Date & Time</th>
+                                            <th>Instructor</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php
+                                    $schedules = $pdo->query("
+                                        SELECT ls.*, l.LabName, li.Name as InstructorName 
+                                        FROM LabSchedule ls 
+                                        JOIN Lab l ON ls.LabID = l.LabID 
+                                        LEFT JOIN LabInstructor li ON ls.InstructorID = li.InstructorID 
+                                        WHERE ls.Status = 'Scheduled' AND ls.Date >= CURDATE()
+                                        ORDER BY ls.Date ASC, ls.TimeSlot ASC 
+                                        LIMIT 10
+                                    ");
+                                    
+                                    if ($schedules->rowCount() > 0) {
+                                        while ($schedule = $schedules->fetch()):
+                                    ?>
+                                        <tr>
+                                            <td>
+                                                <div>
+                                                    <strong><?= htmlspecialchars($schedule['LabName']) ?></strong><br>
+                                                    <small class="text-muted">ID: <?= htmlspecialchars($schedule['ScheduleID']) ?></small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <strong><?= date('M d, Y', strtotime($schedule['Date'])) ?></strong><br>
+                                                    <small class="text-muted"><?= htmlspecialchars($schedule['TimeSlot']) ?></small>
+                                                </div>
+                                            </td>
+                                            <td><?= htmlspecialchars($schedule['InstructorName'] ?? 'TBA') ?></td>
+                                            <td>
+                                                <span class="badge bg-primary"><?= htmlspecialchars($schedule['Status']) ?></span>
+                                            </td>
+                                            <td>
+                                                <a href="reschedule_request.php?schedule=<?= $schedule['ScheduleID'] ?>" 
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-calendar-plus me-1"></i>Request
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php
+                                        endwhile;
+                                    } else {
+                                        echo "<tr><td colspan='5' class='text-center py-4'>
+                                                <i class='fas fa-calendar-times fa-2x text-muted mb-2'></i><br>
+                                                No upcoming lab schedules
+                                              </td></tr>";
+                                    }
+                                    ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Reschedule Requests (NOW SECOND) -->
+                    <div class="card fade-in">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">
                                 <i class="fas fa-history me-2"></i>
@@ -247,80 +321,6 @@ $stats['unread_notifications'] = $stmt->fetch()['unread'];
                                         echo "<tr><td colspan='5' class='text-center py-4'>
                                                 <i class='fas fa-inbox fa-2x text-muted mb-2'></i><br>
                                                 No reschedule requests found
-                                              </td></tr>";
-                                    }
-                                    ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Available Lab Schedules -->
-                    <div class="card fade-in">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                <i class="fas fa-calendar-alt me-2"></i>
-                                Available Lab Schedules
-                            </h5>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-container">
-                                <table class="table table-hover mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Lab</th>
-                                            <th>Date & Time</th>
-                                            <th>Instructor</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php
-                                    $schedules = $pdo->query("
-                                        SELECT ls.*, l.LabName, li.Name as InstructorName 
-                                        FROM LabSchedule ls 
-                                        JOIN Lab l ON ls.LabID = l.LabID 
-                                        LEFT JOIN LabInstructor li ON ls.InstructorID = li.InstructorID 
-                                        WHERE ls.Status = 'Scheduled' AND ls.Date >= CURDATE()
-                                        ORDER BY ls.Date ASC, ls.TimeSlot ASC 
-                                        LIMIT 10
-                                    ");
-                                    
-                                    if ($schedules->rowCount() > 0) {
-                                        while ($schedule = $schedules->fetch()):
-                                    ?>
-                                        <tr>
-                                            <td>
-                                                <div>
-                                                    <strong><?= htmlspecialchars($schedule['LabName']) ?></strong><br>
-                                                    <small class="text-muted">ID: <?= htmlspecialchars($schedule['ScheduleID']) ?></small>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div>
-                                                    <strong><?= date('M d, Y', strtotime($schedule['Date'])) ?></strong><br>
-                                                    <small class="text-muted"><?= htmlspecialchars($schedule['TimeSlot']) ?></small>
-                                                </div>
-                                            </td>
-                                            <td><?= htmlspecialchars($schedule['InstructorName'] ?? 'TBA') ?></td>
-                                            <td>
-                                                <span class="badge bg-primary"><?= htmlspecialchars($schedule['Status']) ?></span>
-                                            </td>
-                                            <td>
-                                                <a href="reschedule_request.php?schedule=<?= $schedule['ScheduleID'] ?>" 
-                                                   class="btn btn-sm btn-outline-primary">
-                                                    <i class="fas fa-calendar-plus me-1"></i>Request
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    <?php
-                                        endwhile;
-                                    } else {
-                                        echo "<tr><td colspan='5' class='text-center py-4'>
-                                                <i class='fas fa-calendar-times fa-2x text-muted mb-2'></i><br>
-                                                No upcoming lab schedules
                                               </td></tr>";
                                     }
                                     ?>
