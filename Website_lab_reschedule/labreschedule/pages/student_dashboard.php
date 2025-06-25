@@ -4,7 +4,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: ../index.php");
     exit;
 }
-require '../includes/db_connect.php';
+
+require '../config/database.php';
+$pageTitle = "Student Dashboard";
 
 // Fetch student details
 $studentID = $_SESSION['ref_id'];
@@ -15,207 +17,439 @@ $student = $stmt->fetch();
 if (!$student) {
     die("Error: Could not find student details for ID: " . htmlspecialchars($studentID));
 }
+
+// Fetch dashboard statistics
+$stats = [];
+
+// Total reschedule requests
+$stmt = $pdo->prepare("SELECT COUNT(*) as total FROM RescheduleRequest WHERE StudentID = ?");
+$stmt->execute([$studentID]);
+$stats['total_requests'] = $stmt->fetch()['total'];
+
+// Pending requests
+$stmt = $pdo->prepare("SELECT COUNT(*) as pending FROM RescheduleRequest WHERE StudentID = ? AND Status = 'Pending'");
+$stmt->execute([$studentID]);
+$stats['pending_requests'] = $stmt->fetch()['pending'];
+
+// Approved requests
+$stmt = $pdo->prepare("SELECT COUNT(*) as approved FROM RescheduleRequest WHERE StudentID = ? AND Status = 'Approved'");
+$stmt->execute([$studentID]);
+$stats['approved_requests'] = $stmt->fetch()['approved'];
+
+// Unread notifications
+$stmt = $pdo->prepare("SELECT COUNT(*) as unread FROM Notification WHERE StudentID = ?");
+$stmt->execute([$studentID]);
+$stats['unread_notifications'] = $stmt->fetch()['unread'];
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LabReschedule - Student Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background: linear-gradient(135deg, #fceed1 0%, #ffe6f2 100%); font-family: 'Poppins', sans-serif; padding-top: 30px; padding-bottom: 30px;}
-        .container { max-width: 1200px; }
-        .dashboard-title {
-            color: #4B0082; font-weight: 700; margin-bottom: 25px; text-align: center;
-            background: rgba(0, 204, 153, 0.1); padding: 10px; border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-        }
-        .welcome-card {
-            background: #fff; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-            border: none; overflow: hidden; position: relative; margin-bottom: 30px;
-        }
-        .welcome-card::before {
-            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
-            background: linear-gradient(90deg, #00CC99, #FF355E);
-        }
-        .welcome-card h3 { color: #4B0082; font-weight: 600; }
-        .section-title {
-            color: #4B0082; font-weight: 500; margin-bottom: 15px;
-            border-left: 4px solid #00CC99; padding-left: 10px;
-        }
-        .table { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.05);}
-        .table thead { background: #4B0082; color: #fff; }
-        .table tbody tr:hover { background: rgba(0,204,153,0.07);}
-        .badge.bg-primary { background: #4B0082 !important; }
-        .badge.bg-success { background: #00CC99 !important; }
-        .badge.bg-danger { background: #FF355E !important; }
-        .btn-primary { background: #FF355E; border: none; color: #fff; font-weight: 600; padding: 10px 20px; border-radius: 30px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - EduPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-<div class="container">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="../index.php">
+                <i class="fas fa-graduation-cap me-2"></i>
+                <span class="fw-bold">EduPortal</span>
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="student_dashboard.php">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="reschedule_request.php">
+                            <i class="fas fa-calendar-alt me-1"></i>Request Reschedule
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="notifications.php">
+                            <i class="fas fa-bell me-1"></i>Notifications
+                            <?php if ($stats['unread_notifications'] > 0): ?>
+                                <span class="badge bg-danger ms-1"><?= $stats['unread_notifications'] ?></span>
+                            <?php endif; ?>
+                        </a>
+                    </li>
+                </ul>
+                
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i>
+                            <?= htmlspecialchars($student['Name']) ?>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="profile.php"><i class="fas fa-user me-2"></i>Profile</a></li>
+                            <li><a class="dropdown-item" href="settings.php"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container-fluid">
+            <div class="page-header fade-in">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="page-title">
+                            <i class="fas fa-tachometer-alt me-3"></i>
+                            Welcome back, <?= htmlspecialchars($student['Name']) ?>
+                        </h1>
+                        <p class="page-subtitle">Manage your lab schedules and reschedule requests</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a href="reschedule_request.php" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>New Request
+                            </a>
+                            <a href="logout.php" class="btn btn-outline-danger">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-<!-- LOGOUT BUTTON -->
-<div class="d-flex justify-content-end mb-3">
-    <a href="logout.php" class="btn btn-outline-danger">Logout</a>
-</div>
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3 mb-3">
+                    <div class="stats-card slide-up">
+                        <i class="fas fa-calendar-check stats-icon"></i>
+                        <div class="stats-number"><?= $stats['total_requests'] ?></div>
+                        <div class="stats-label">Total Requests</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="stats-card slide-up" style="animation-delay: 0.1s;">
+                        <i class="fas fa-clock stats-icon"></i>
+                        <div class="stats-number"><?= $stats['pending_requests'] ?></div>
+                        <div class="stats-label">Pending</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="stats-card slide-up" style="animation-delay: 0.2s;">
+                        <i class="fas fa-check-circle stats-icon"></i>
+                        <div class="stats-number"><?= $stats['approved_requests'] ?></div>
+                        <div class="stats-label">Approved</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="stats-card slide-up" style="animation-delay: 0.3s;">
+                        <i class="fas fa-bell stats-icon"></i>
+                        <div class="stats-number"><?= $stats['unread_notifications'] ?></div>
+                        <div class="stats-label">Notifications</div>
+                    </div>
+                </div>
+            </div>
 
-<h1 class="dashboard-title">Student Dashboard</h1>
+            <?php if (isset($_GET['msg']) && $_GET['msg'] == 'success'): ?>
+                <div class="alert alert-success fade-in">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Request submitted successfully!
+                </div>
+            <?php endif; ?>
 
-<?php if (isset($_GET['msg']) && $_GET['msg'] == 'success'): ?>
-    <div class="alert alert-success">Request submitted successfully!</div>
-<?php endif; ?>
+            <!-- Recent Activity -->
+            <div class="row">
+                <div class="col-lg-8">
+                    <!-- Recent Reschedule Requests -->
+                    <div class="card mb-4 fade-in">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-history me-2"></i>
+                                Recent Reschedule Requests
+                            </h5>
+                            <a href="reschedule_request.php" class="btn btn-sm btn-primary">
+                                <i class="fas fa-plus me-1"></i>New Request
+                            </a>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-container">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Request ID</th>
+                                            <th>Schedule</th>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php
+                                    $recentRequests = $pdo->prepare("
+                                        SELECT rr.*, ls.Date as ScheduleDate, ls.TimeSlot, l.LabName 
+                                        FROM RescheduleRequest rr 
+                                        LEFT JOIN LabSchedule ls ON rr.ScheduleID = ls.ScheduleID 
+                                        LEFT JOIN Lab l ON ls.LabID = l.LabID 
+                                        WHERE rr.StudentID = ? 
+                                        ORDER BY rr.RequestDate DESC 
+                                        LIMIT 5
+                                    ");
+                                    $recentRequests->execute([$studentID]);
+                                    
+                                    if ($recentRequests->rowCount() > 0) {
+                                        while ($req = $recentRequests->fetch()):
+                                            $statusClass = match($req['Status']) {
+                                                'Approved' => 'success',
+                                                'Rejected' => 'danger',
+                                                default => 'warning'
+                                            };
+                                    ?>
+                                        <tr>
+                                            <td>
+                                                <span class="fw-bold"><?= htmlspecialchars($req['RequestID']) ?></span>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <strong><?= htmlspecialchars($req['LabName'] ?? 'N/A') ?></strong><br>
+                                                    <small class="text-muted"><?= htmlspecialchars($req['TimeSlot'] ?? 'N/A') ?></small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fw-medium"><?= date('M d, Y', strtotime($req['RequestDate'])) ?></span><br>
+                                                <small class="text-muted"><?= date('g:i A', strtotime($req['RequestDate'])) ?></small>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($req['Status']) ?></span>
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" onclick="viewRequest('<?= $req['RequestID'] ?>')">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php
+                                        endwhile;
+                                    } else {
+                                        echo "<tr><td colspan='5' class='text-center py-4'>
+                                                <i class='fas fa-inbox fa-2x text-muted mb-2'></i><br>
+                                                No reschedule requests found
+                                              </td></tr>";
+                                    }
+                                    ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
 
-<!-- Student Info -->
-<div class="welcome-card mb-4">
-    <div class="card-body">
-        <h3 class="card-title">Welcome, <?= htmlspecialchars($student['Name']) ?></h3>
-        <p class="mb-1"><strong>Email:</strong> <?= htmlspecialchars($student['Email']) ?></p>
-        <p class="mb-0"><strong>Phone:</strong> <?= htmlspecialchars($student['Phone']) ?></p>
-    </div>
-</div>
+                    <!-- Available Lab Schedules -->
+                    <div class="card fade-in">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Available Lab Schedules
+                            </h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-container">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Lab</th>
+                                            <th>Date & Time</th>
+                                            <th>Instructor</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php
+                                    $schedules = $pdo->query("
+                                        SELECT ls.*, l.LabName, li.Name as InstructorName 
+                                        FROM LabSchedule ls 
+                                        JOIN Lab l ON ls.LabID = l.LabID 
+                                        LEFT JOIN LabInstructor li ON ls.InstructorID = li.InstructorID 
+                                        WHERE ls.Status = 'Scheduled' AND ls.Date >= CURDATE()
+                                        ORDER BY ls.Date ASC, ls.TimeSlot ASC 
+                                        LIMIT 10
+                                    ");
+                                    
+                                    if ($schedules->rowCount() > 0) {
+                                        while ($schedule = $schedules->fetch()):
+                                    ?>
+                                        <tr>
+                                            <td>
+                                                <div>
+                                                    <strong><?= htmlspecialchars($schedule['LabName']) ?></strong><br>
+                                                    <small class="text-muted">ID: <?= htmlspecialchars($schedule['ScheduleID']) ?></small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <strong><?= date('M d, Y', strtotime($schedule['Date'])) ?></strong><br>
+                                                    <small class="text-muted"><?= htmlspecialchars($schedule['TimeSlot']) ?></small>
+                                                </div>
+                                            </td>
+                                            <td><?= htmlspecialchars($schedule['InstructorName'] ?? 'TBA') ?></td>
+                                            <td>
+                                                <span class="badge bg-primary"><?= htmlspecialchars($schedule['Status']) ?></span>
+                                            </td>
+                                            <td>
+                                                <a href="reschedule_request.php?schedule=<?= $schedule['ScheduleID'] ?>" 
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-calendar-plus me-1"></i>Request
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php
+                                        endwhile;
+                                    } else {
+                                        echo "<tr><td colspan='5' class='text-center py-4'>
+                                                <i class='fas fa-calendar-times fa-2x text-muted mb-2'></i><br>
+                                                No upcoming lab schedules
+                                              </td></tr>";
+                                    }
+                                    ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-<!-- Your Notifications Table - MOVED TO TOP -->
-<h4 class="section-title">Your Notifications</h4>
-<div class="table-responsive mb-4">
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Message</th>
-                <th>Type</th>
-                <th>Timestamp</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php
-        $notif = $pdo->prepare("SELECT * FROM Notification WHERE StudentID = ? ORDER BY Timestamp DESC");
-        $notif->execute([$studentID]);
-        if ($notif->rowCount() > 0) {
-            foreach ($notif as $row) {
-                echo "<tr>
-                    <td>".htmlspecialchars($row['Message'])."</td>
-                    <td>".htmlspecialchars($row['Type'])."</td>
-                    <td>".htmlspecialchars($row['Timestamp'])."</td>
-                </tr>";
+                <div class="col-lg-4">
+                    <!-- Quick Stats -->
+                    <div class="card mb-4 fade-in">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-chart-pie me-2"></i>
+                                Quick Overview
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="requestChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recent Notifications -->
+                    <div class="card fade-in">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-bell me-2"></i>
+                                Recent Notifications
+                            </h5>
+                            <a href="notifications.php" class="btn btn-sm btn-outline-primary">View All</a>
+                        </div>
+                        <div class="card-body">
+                            <?php
+                            $notifications = $pdo->prepare("
+                                SELECT * FROM Notification 
+                                WHERE StudentID = ? 
+                                ORDER BY Timestamp DESC 
+                                LIMIT 5
+                            ");
+                            $notifications->execute([$studentID]);
+                            
+                            if ($notifications->rowCount() > 0) {
+                                while ($notif = $notifications->fetch()):
+                            ?>
+                                <div class="d-flex align-items-start mb-3 p-2 rounded" style="background: #f8f9fa;">
+                                    <div class="flex-shrink-0 me-3">
+                                        <i class="fas fa-info-circle text-primary"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <p class="mb-1 fw-medium"><?= htmlspecialchars($notif['Message']) ?></p>
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-1"></i>
+                                            <?= date('M d, Y g:i A', strtotime($notif['Timestamp'])) ?>
+                                        </small>
+                                    </div>
+                                </div>
+                            <?php
+                                endwhile;
+                            } else {
+                                echo "<div class='text-center py-3'>
+                                        <i class='fas fa-bell-slash fa-2x text-muted mb-2'></i><br>
+                                        <span class='text-muted'>No notifications</span>
+                                      </div>";
+                            }
+                            ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-graduation-cap me-2"></i>EduPortal</h5>
+                    <p class="mb-0">Professional Lab Rescheduling Management System</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <p class="mb-0">&copy; <?php echo date('Y'); ?> EduPortal. All rights reserved.</p>
+                    <small class="text-muted">Version 2.0</small>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+    // Chart.js for request statistics
+    const ctx = document.getElementById('requestChart').getContext('2d');
+    const requestChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Approved', 'Pending', 'Rejected'],
+            datasets: [{
+                data: [
+                    <?= $stats['approved_requests'] ?>,
+                    <?= $stats['pending_requests'] ?>,
+                    <?= $stats['total_requests'] - $stats['approved_requests'] - $stats['pending_requests'] ?>
+                ],
+                backgroundColor: [
+                    '#10b981',
+                    '#f59e0b',
+                    '#ef4444'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
             }
-        } else {
-            echo "<tr><td colspan='3' class='text-center'>No notifications found.</td></tr>";
         }
-        ?>
-        </tbody>
-    </table>
-</div>
+    });
 
-<!-- My Reschedule Requests -->
-<h4 class="section-title">My Reschedule Requests</h4>
-<div class="table-responsive mb-4">
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Request ID</th>
-                <th>Schedule ID</th>
-                <th>Date Requested</th>
-                <th>Reason</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php
-        $myRequests = $pdo->prepare("SELECT * FROM RescheduleRequest WHERE StudentID = ? ORDER BY RequestDate DESC");
-        $myRequests->execute([$studentID]);
-        if ($myRequests->rowCount() > 0) {
-            foreach ($myRequests as $req) {
-                $statusClass = $req['Status'] == 'Approved' ? 'bg-success' : ($req['Status'] == 'Rejected' ? 'bg-danger' : 'bg-warning text-dark');
-                echo "<tr>
-                    <td>".htmlspecialchars($req['RequestID'])."</td>
-                    <td>".htmlspecialchars($req['ScheduleID'])."</td>
-                    <td>".htmlspecialchars($req['RequestDate'])."</td>
-                    <td>".htmlspecialchars($req['Reason'])."</td>
-                    <td><span class='badge $statusClass'>".htmlspecialchars($req['Status'])."</span></td>
-                </tr>";
-            }
-        } else {
-            echo "<tr><td colspan='5' class='text-center'>No reschedule requests found.</td></tr>";
-        }
-        ?>
-        </tbody>
-    </table>
-</div>
-
-<!-- Lab Schedules Table -->
-<h4 class="section-title">All Available Lab Schedules</h4>
-<div class="table-responsive mb-4">
-    <table class="table table-striped table-hover">
-        <thead>
-            <tr>
-                <th>Schedule ID</th>
-                <th>Lab Name</th>
-                <th>Date</th>
-                <th>Time Slot</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php
-        $schedules = $pdo->query("
-            SELECT ls.ScheduleID, l.LabName, ls.Date, ls.TimeSlot, ls.Status 
-            FROM LabSchedule ls 
-            JOIN Lab l ON ls.LabID = l.LabID 
-            WHERE ls.Status = 'Scheduled' 
-            ORDER BY ls.Date ASC
-        ");
-        if ($schedules->rowCount() > 0) {
-            foreach ($schedules as $row) {
-                echo "<tr>
-                    <td>".htmlspecialchars($row['ScheduleID'])."</td>
-                    <td>".htmlspecialchars($row['LabName'])."</td>
-                    <td>".htmlspecialchars($row['Date'])."</td>
-                    <td>".htmlspecialchars($row['TimeSlot'])."</td>
-                    <td><span class='badge bg-primary'>".htmlspecialchars($row['Status'])."</span></td>
-                </tr>";
-            }
-        } else {
-            echo "<tr><td colspan='5' class='text-center'>No lab schedules found.</td></tr>";
-        }
-        ?>
-        </tbody>
-    </table>
-</div>
-
-<a href="reschedule_request.php" class="btn btn-primary">Request Lab Reschedule</a>
-
-<!-- Your Attendance History -->
-<h4 class="section-title mt-4">Your Attendance History</h4>
-<div class="table-responsive">
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Schedule ID</th>
-                <th>Present</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php
-        $att = $pdo->prepare("SELECT * FROM Attendance WHERE StudentID = ? ORDER BY Date DESC");
-        $att->execute([$studentID]);
-        if ($att->rowCount() > 0) {
-            foreach ($att as $row) {
-                echo "<tr>
-                    <td>".htmlspecialchars($row['Date'])."</td>
-                    <td>".htmlspecialchars($row['ScheduleID'])."</td>
-                    <td>".($row['Present'] ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-danger">No</span>')."</td>
-                </tr>";
-            }
-        } else {
-            echo "<tr><td colspan='3' class='text-center'>No attendance records found.</td></tr>";
-        }
-        ?>
-        </tbody>
-    </table>
-</div>
-
-</div> <!-- end container -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    // View request details
+    function viewRequest(requestId) {
+        alert('Request details for ID: ' + requestId);
+    }
+    </script>
 </body>
 </html>

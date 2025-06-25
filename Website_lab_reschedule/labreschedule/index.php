@@ -1,132 +1,146 @@
 <?php
 session_start();
+require_once 'config/database.php';
+
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    require 'includes/db_connect.php';
-
-    $username = trim($_POST['username']);
-    $password = $_POST['password'];
-    $role = $_POST['role'];
-
-    // Fetch user by username and role
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? AND role = ?");
-    $stmt->execute([$username, $role]);
-    $user = $stmt->fetch();
-
-    if ($user && password_verify($password, $user['password_hash'])) {
-        // Login success: set session and redirect
-        $_SESSION['user_id'] = $user['user_id'];
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['ref_id'] = $user['ref_id'];
-        // Redirect to dashboard based on role
-        if ($user['role'] == 'student') {
-            header("Location: pages/student_dashboard.php");
-        } elseif ($user['role'] == 'instructor') {
-            header("Location: pages/instructor_dashboard.php");
-        } elseif ($user['role'] == 'coordinator') {
-            header("Location: pages/coordinator_dashboard.php");
+if ($_POST) {
+    $username = $_POST['username'] ?? '';
+    $password = $_POST['password'] ?? '';
+    $role = $_POST['role'] ?? '';
+    
+    if ($username && $password && $role) {
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? AND role = ?");
+        $stmt->execute([$username, $role]);
+        $user = $stmt->fetch();
+        
+        if ($user && password_verify($password, $user['password_hash'])) {
+            $_SESSION['user_id'] = $user['user_id'];
+            $_SESSION['role'] = $user['role'];
+            $_SESSION['ref_id'] = $user['ref_id'];
+            
+            if ($user['role'] == 'student') {
+                header("Location: pages/student_dashboard.php");
+            } elseif ($user['role'] == 'instructor') {
+                header("Location: pages/instructor_dashboard.php");
+            } elseif ($user['role'] == 'coordinator') {
+                header("Location: pages/coordinator_dashboard.php");
+            }
+            exit;
+        } else {
+            $error = "Invalid credentials. Please check your username, password, and role.";
         }
-        exit;
     } else {
-        $error = "<div class='alert alert-danger'>Invalid credentials or role.</div>";
+        $error = "Please fill in all required fields.";
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Lab Reschedule Login</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(135deg, #fceed1 0%, #ffe6f2 100%);
-            font-family: 'Poppins', sans-serif;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .login-box {
-            max-width: 450px;
-            background: #fff;
-            border-radius: 15px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-            padding: 2.5em;
-            position: relative;
-        }
-        .login-box::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 5px;
-            background: linear-gradient(90deg, #00CC99, #FF355E);
-        }
-        .logo {
-            color: #4B0082;
-            font-weight: bold;
-            font-size: 2.2em;
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-        .form-control, .form-select {
-            border-radius: 8px;
-            padding: 12px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        .form-control:focus, .form-select:focus {
-            border-color: #00CC99;
-            box-shadow: 0 0 0 0.2rem rgba(0, 204, 153, 0.25);
-        }
-        .btn-primary {
-            background: #FF355E;
-            border: none;
-            font-weight: 600;
-            padding: 12px;
-            border-radius: 30px;
-            transition: all 0.3s ease;
-        }
-        .btn-primary:hover {
-            background: #e62e4d;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(255, 53, 94, 0.3);
-        }
-        .alert-danger {
-            background: rgba(255, 53, 94, 0.1);
-            color: #FF355E;
-            border: none;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduPortal - Login</title>
+    <link rel="stylesheet" href="assets/css/login.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-<div class="login-box">
-    <div class="logo mb-3">LabReschedule</div>
-    <?= $error ?>
-    <form method="post" autocomplete="off">
-        <div class="mb-3">
-            <label class="form-label">User ID</label>
-            <input type="text" name="username" class="form-control" required placeholder="Enter your ID">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo">
+                    <i class="fas fa-graduation-cap"></i>
+                    <h1>EduPortal</h1>
+                </div>
+                <p class="subtitle">Welcome back! Please sign in to your account</p>
+            </div>
+
+            <?php if ($error): ?>
+                <div class="alert alert-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span><?php echo htmlspecialchars($error); ?></span>
+                </div>
+            <?php endif; ?>
+
+            <form class="login-form" method="POST" action="">
+                <div class="form-group">
+                    <label for="role" class="form-label">
+                        <i class="fas fa-user-tag"></i>
+                        Role
+                    </label>
+                    <select id="role" name="role" class="form-select" required>
+                        <option value="">Select your role</option>
+                        <option value="student" <?php echo (isset($_POST['role']) && $_POST['role'] == 'student') ? 'selected' : ''; ?>>Student</option>
+                        <option value="instructor" <?php echo (isset($_POST['role']) && $_POST['role'] == 'instructor') ? 'selected' : ''; ?>>Instructor</option>
+                        <option value="coordinator" <?php echo (isset($_POST['role']) && $_POST['role'] == 'coordinator') ? 'selected' : ''; ?>>Coordinator</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="username" class="form-label">
+                        <i class="fas fa-user"></i>
+                        Username
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-input" 
+                        placeholder="Enter your username"
+                        value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">
+                        <i class="fas fa-lock"></i>
+                        Password
+                    </label>
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            class="form-input" 
+                            placeholder="Enter your password"
+                            required
+                        >
+                        <button type="button" class="password-toggle" onclick="togglePassword()">
+                            <i class="fas fa-eye" id="password-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox-wrapper">
+                        <input type="checkbox" name="remember_me">
+                        <span class="checkmark"></span>
+                        Remember me
+                    </label>
+                    <a href="forgot-password.php" class="forgot-link">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Sign In
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p>Don't have an account? <a href="register.php">Sign up here</a></p>
+            </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" required placeholder="Password">
+
+        <div class="background-decoration">
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+            <div class="shape shape-3"></div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Role</label>
-            <select name="role" class="form-select" required>
-                <option value="student">Student</option>
-                <option value="instructor">Lab Instructor</option>
-                <option value="coordinator">Subject Coordinator</option>
-            </select>
-        </div>
-        <button type="submit" class="btn btn-primary w-100">Login</button>
-    </form>
-</div>
+    </div>
+
+    <script src="assets/js/login.js"></script>
 </body>
 </html>
