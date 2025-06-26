@@ -53,7 +53,16 @@ if (!$instructor) {
                             <i class="fas fa-calendar-alt me-1"></i>View Schedules
                         </a>
                     </li>
+
+                    <!-- In your instructor_dashboard.php navigation -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="instructor_attendance.php">
+                            <i class="fas fa-user-check me-1"></i>Mark Attendance
+                        </a>
+                    </li>
+
                 </ul>
+                
                 
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown">
@@ -72,6 +81,8 @@ if (!$instructor) {
             </div>
         </div>
     </nav>
+    
+
 
     <!-- Main Content -->
     <main class="main-content">
