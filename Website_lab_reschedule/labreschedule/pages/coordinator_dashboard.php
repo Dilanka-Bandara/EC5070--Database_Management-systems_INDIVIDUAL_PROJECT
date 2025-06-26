@@ -25,11 +25,12 @@ if (isset($_POST['delete_notification'])) {
     $deleteStmt->execute([$notificationId]);
 }
 
-// Handle Accept/Reject for reschedule requests
+// Handle Accept/Reject for reschedule requests - FIXED VERSION
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['decision']) && isset($_POST['request_id'])) {
     $requestID = $_POST['request_id'];
     $decision = $_POST['decision'];
     $status = ($decision === 'Approved') ? 'Approved' : 'Rejected';
+    $decisionTime = $_POST['decision_time'] ?? date('Y-m-d H:i:s');
 
     try {
         // Get student ID from the request
@@ -45,38 +46,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['decision']) && isset($
             $stmt = $pdo->prepare("UPDATE RescheduleRequest SET Status = ? WHERE RequestID = ?");
             $stmt->execute([$status, $requestID]);
 
-            // Log the action with current timestamp (this creates our decision timestamp)
-            $log = $pdo->prepare("INSERT INTO RescheduleLog (RequestID, Action, Timestamp) VALUES (?, ?, NOW())");
-            $log->execute([$requestID, $status]);
+            // Log the action
+            $log = $pdo->prepare("INSERT INTO RescheduleLog (RequestID, Action, Timestamp) VALUES (?, ?, ?)");
+            $log->execute([$requestID, $status, $decisionTime]);
 
-            // Get the exact decision time from the log we just created
-            $getDecisionTime = $pdo->prepare("
-                SELECT Timestamp FROM RescheduleLog 
-                WHERE RequestID = ? AND Action = ? 
-                ORDER BY Timestamp DESC LIMIT 1
-            ");
-            $getDecisionTime->execute([$requestID, $status]);
-            $decisionTime = $getDecisionTime->fetch();
-
-            // Send notification to student with exact decision time
-            if ($decisionTime) {
-                $decisionTimeFormatted = date('M d, Y \a\t g:i A', strtotime($decisionTime['Timestamp']));
-                $notificationMessage = "Your reschedule request (ID: $requestID) for lab schedule $scheduleID was $status on $decisionTimeFormatted by the coordinator.";
-            } else {
-                $notificationMessage = "Your reschedule request (ID: $requestID) for lab schedule $scheduleID has been $status by the coordinator.";
-            }
-            
-            $notif_student = $pdo->prepare("INSERT INTO Notification (Message, Timestamp, Type, StudentID) VALUES (?, NOW(), ?, ?)");
-            $notif_student->execute([$notificationMessage, 'reschedule_response', $studentID]);
+            // Send notification to student
+            $decisionTimeFormatted = date('M d, Y \a\t g:i A', strtotime($decisionTime));
+            $notificationMessage = "Your reschedule request (ID: $requestID) for lab schedule $scheduleID was $status on $decisionTimeFormatted by the coordinator.";
+            $notif_student = $pdo->prepare("INSERT INTO Notification (Message, Timestamp, Type, StudentID) VALUES (?, ?, ?, ?)");
+            $notif_student->execute([$notificationMessage, $decisionTime, 'reschedule_response', $studentID]);
 
             // Send confirmation notification to coordinator
-            $coordinatorMessage = "You have successfully $status reschedule request (ID: $requestID) for student ID: $studentID.";
-            $notif_coordinator = $pdo->prepare("INSERT INTO Notification (Message, Timestamp, Type, CoordinatorID) VALUES (?, NOW(), ?, ?)");
-            $notif_coordinator->execute([$coordinatorMessage, 'action_confirmation', $coordinatorID]);
+            $coordinatorMessage = "You have successfully $status reschedule request (ID: $requestID) for student ID: $studentID at $decisionTimeFormatted.";
+            $notif_coordinator = $pdo->prepare("INSERT INTO Notification (Message, Timestamp, Type, CoordinatorID) VALUES (?, ?, ?, ?)");
+            $notif_coordinator->execute([$coordinatorMessage, $decisionTime, 'action_confirmation', $coordinatorID]);
+            
+            // Redirect to prevent resubmission
+            header("Location: coordinator_dashboard.php");
+            exit;
         }
         
     } catch (PDOException $e) {
         error_log("Notification/Log error: " . $e->getMessage());
+        $message = "<div class='alert alert-danger'>Error processing request. Please try again.</div>";
     }
 }
 
@@ -341,8 +333,10 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                                                 <small class="text-muted"><?= date('g:i A', strtotime($request['RequestDate'])) ?></small>
                                             </td>
                                             <td>
-                                                <form method="POST" class="d-inline">
+                                                <!-- FIXED FORM -->
+                                                <form method="POST" class="d-inline" action="">
                                                     <input type="hidden" name="request_id" value="<?= htmlspecialchars($request['RequestID']) ?>">
+                                                    <input type="hidden" name="decision_time" value="">
                                                     <div class="btn-group" role="group">
                                                         <button type="submit" name="decision" value="Approved" 
                                                                 class="btn btn-sm btn-success" title="Approve">
@@ -454,7 +448,7 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                         </div>
                     </div>
 
-                    <!-- Recent Approved & Rejected Requests (UPDATED WITH RESCHEDULE LOG TIMESTAMP) -->
+                    <!-- Recent Approved & Rejected Requests -->
                     <div class="card fade-in">
                         <div class="card-header">
                             <h5 class="mb-0">
@@ -777,6 +771,27 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
+    // FIXED JavaScript - Set decision time and handle form submission
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set decision time when form is submitted
+        const forms = document.querySelectorAll('form');
+        forms.forEach(form => {
+            form.addEventListener('submit', function() {
+                const timeInput = this.querySelector('input[name="decision_time"]');
+                if (timeInput) {
+                    const now = new Date();
+                    const localTime = now.getFullYear() + '-' + 
+                        String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                        String(now.getDate()).padStart(2, '0') + ' ' + 
+                        String(now.getHours()).padStart(2, '0') + ':' + 
+                        String(now.getMinutes()).padStart(2, '0') + ':' + 
+                        String(now.getSeconds()).padStart(2, '0');
+                    timeInput.value = localTime;
+                }
+            });
+        });
+    });
+
     // Working Chart.js for system overview
     <?php
     // Get data for chart showing request status distribution
