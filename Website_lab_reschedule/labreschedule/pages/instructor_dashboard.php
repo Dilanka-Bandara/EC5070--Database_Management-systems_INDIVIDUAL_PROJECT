@@ -53,6 +53,12 @@ if (!$instructor) {
                             <i class="fas fa-calendar-alt me-1"></i>View Schedules
                         </a>
                     </li>
+                    <!-- In your instructor_dashboard.php navigation -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="instructor_manage_attendance.php">
+                            <i class="fas fa-edit me-1"></i>Manage Attendance
+                        </a>
+                    </li>
 
                     <!-- In your instructor_dashboard.php navigation -->
                     <li class="nav-item">

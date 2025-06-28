@@ -183,6 +183,14 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                             <i class="fas fa-calendar-alt me-1"></i>Manage Schedules
                         </a>
                     </li>
+                    <!-- In your coordinator_dashboard.php navigation -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="manage_attendance.php">
+                            <i class="fas fa-user-check me-1"></i>Manage Attendance
+                        </a>
+                    </li>
+
+
                 </ul>
                 
                 <ul class="navbar-nav">
