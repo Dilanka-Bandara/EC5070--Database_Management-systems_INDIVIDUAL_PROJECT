@@ -179,7 +179,7 @@ $instructors = $pdo->query("SELECT InstructorID, Name FROM LabInstructor ORDER B
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="coordinator_dashboard.php">
+                        <a class="nav-link" href="manage_schedules.php">
                             <i class="fas fa-calendar-alt me-1"></i>Manage Schedules
                         </a>
                     </li>

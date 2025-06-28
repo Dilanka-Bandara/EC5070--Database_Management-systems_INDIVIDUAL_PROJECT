@@ -87,6 +87,13 @@ $stats['unread_notifications'] = $stmt->fetch()['unread'];
                             <?php endif; ?>
                         </a>
                     </li>
+                    <!-- In your student_dashboard.php navigation -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="manage_requests.php">
+                            <i class="fas fa-edit me-1"></i>Manage Requests
+                        </a>
+                    </li>
+
                 </ul>
                 
                 <ul class="navbar-nav">
@@ -163,6 +170,14 @@ $stats['unread_notifications'] = $stmt->fetch()['unread'];
                     </div>
                 </div>
             </div>
+            <!-- In your student_dashboard.php dropdown menu -->
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="student_profile.php"><i class="fas fa-user me-2"></i>Profile</a></li>
+                <li><a class="dropdown-item" href="student_settings.php"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                <li><a class="dropdown-item" href="manage_requests.php"><i class="fas fa-edit me-2"></i>Manage Requests</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+            </ul>
 
             <?php if (isset($_GET['msg']) && $_GET['msg'] == 'success'): ?>
                 <div class="alert alert-success fade-in">
